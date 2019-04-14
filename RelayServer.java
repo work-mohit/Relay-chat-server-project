@@ -1,100 +1,86 @@
-// This file is belong to Mohit Joshi.
-// In this program we use networking concepts of java to code
-// It is a basic server program in which we can make a computer out server and the other as the client who can chat to each other
-
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Scanner;
+import java.util.ArrayList;
+import java.lang.Thread;
 
-// for an individual client identity
-class User{
-    private static String name;
+class clients{
+    public static ArrayList<Socket> list = new ArrayList<Socket>();
 }
-// it will handle all the incoming messages
-class Listener extends Thread{
-    private Socket socket;
-    public Listener(Socket s ) {
-        socket = s;
-    }
-    @Override
+
+class ChatServer extends Thread{
+
     public void run(){
-         try{
-             while(socket.isConnected()) {
-
-                DataInputStream in = new DataInputStream(socket.getInputStream());
-
-                System.out.println("Client:" + in.readUTF());
-            }
-        }catch (Exception e) {
-             e.printStackTrace();
-         }finally {
-             try{
-                 socket.close();
-             }catch (Exception e){
-
-             }
-         }
-    }
-
-}
-// it will responsible for sending messages
-class Sender extends Thread{
-    private Socket socket;
-    public Sender(Socket s){
-        socket = s;
-    }
-    @Override
-    public void run() {
-         try{
-             while (socket.isConnected()) {
-
-                DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-                Scanner scanner = new Scanner(System.in);
-                String mssg = scanner.nextLine();
-
-
-                out.writeUTF(User.name +": "+mssg);
-            }
-        }catch(Exception e ){
-             e.printStackTrace();
-        }finally {
-             try{
-                 socket.close();
-             }catch (Exception e){
-
-             }
-         }
-    }
-
-
-}
-
-// here is the main class in which we first connect to the server ip
-public class Main {
-
-    public static void main(String[] args) {
         try{
-            System.out.println("Enter the IP address to connect:");
-            Scanner in = new Scanner(System.in);
+            ServerSocket ss = new ServerSocket(8090);
+            ss.setSoTimeout(1000000);
 
-            String ipAddress = in.nextLine();
+            while(true){
+                try{
+                    System.out.println("Listening on port:"+ss.getLocalPort());
 
-            Socket socket = new Socket(ipAddress,8090);
-            System.out.println("Connected to "+socket.getLocalSocketAddress());
-
-            Thread t1 = new Listener(socket);
-            Thread t2 = new Sender(socket);
-
-            t1.start();
-            t2.start();
-
-        //   socket.close();
+                    Socket client = ss.accept();
+                    clients.list.add(client);
+                    System.out.println("Connected to" +client.getRemoteSocketAddress());
+                    Thread tChat = new Chat(client);
+                    tChat.start();
+                }catch (Exception e){
+                        break;
+                }
+            }
+        }catch (IOException e){
+                e.printStackTrace();
         }
-        catch (Exception e){
-            e.printStackTrace();
+    }
+
+}
+
+class Chat extends Thread{
+    private Socket client;
+    public Chat(Socket client){
+        this.client = client;
+    }
+
+    public void run(){
+        try{
+            while(true){
+                DataInputStream in = new DataInputStream(client.getInputStream());
+                String mssg = in.readUTF();
+
+                for(Socket cl: clients.list){
+                    if(cl.isConnected()){
+                        if(cl!=client){
+                            DataOutputStream out = new DataOutputStream(client.getOutputStream());
+                            out.writeUTF(mssg);
+                        }
+                        else{
+                            cl.close();
+                            clients.list.remove(cl);
+                        }
+                    }
+                }
+            }
+        }catch(Exception e){
+            try{
+                clients.list.remove(client);
+                client.close();
+                System.out.println("Client connection Reset.");
+            }catch (Exception exp){
+                System.out.println("Error closing connection to client");
+            }
+
         }
+    }
+}
+
+
+public class RelayServer {
+    public static void main(String[] args) {
+        Thread tServer = new ChatServer ();
+        tServer.start();
+
     }
 }
